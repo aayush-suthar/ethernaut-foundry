@@ -22,7 +22,7 @@ forge script script/01-Fallback.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
 
 ## 02 - Fallout
-**Difficulty:** 2/10  
+**Difficulty:** 1/5  
 **Vulnerability:** Insecure Initialization / Constructor Naming Typo
 
 ### Analysis
@@ -35,3 +35,4 @@ In Solidity versions prior to `0.4.22`, a constructor was defined as a function 
 ### Execution
 ```bash
 forge script script/02-Fallout.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
