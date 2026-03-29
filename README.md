@@ -19,7 +19,7 @@ The contract allows any user to become the `owner` by satisfying two conditions 
 ### Execution
 ```bash
 forge script script/01-Fallback.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
-
+```
 
 ## 02 - Fallout
 **Difficulty:** 2/10  
