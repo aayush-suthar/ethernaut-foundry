@@ -13,7 +13,7 @@ contract DeployFallback is Script{
     address private constant TARGET_ADDRESS = 0x4189a5D594E4e5547ad6bb804E2DFb3F59a688e4;
 
     function run() public {
-        uint256 privateKey = vm.envUint("YOUR_PRIVATE_KEY");
+        uint256 privateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(privateKey);
 
         IFallback target = IFallback(TARGET_ADDRESS);
