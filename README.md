@@ -3,7 +3,7 @@
 Professional security research and proof-of-concepts for OpenZeppelin's Ethernaut challenges.
 
 ## 01 - Fallback
-**Difficulty:** 1/10  
+**Difficulty:** 1/5  
 **Vulnerability:** Broken Access Control / Insecure Logic in `receive()`
 
 ### Analysis
@@ -19,3 +19,19 @@ The contract allows any user to become the `owner` by satisfying two conditions 
 ### Execution
 ```bash
 forge script script/01-Fallback.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
+
+
+## 02 - Fallout
+**Difficulty:** 2/10  
+**Vulnerability:** Insecure Initialization / Constructor Naming Typo
+
+### Analysis
+In Solidity versions prior to `0.4.22`, a constructor was defined as a function sharing the exact name of the contract. The developer intended to restrict initialization upon deployment but introduced a typographical error (`Fal1out` instead of `Fallout`). Consequently, the EVM compiled this intended constructor as a standard, state-mutating `public payable` function, leaving the initialization logic fully exposed.
+
+### Exploit Path
+1. Call the misnamed `Fal1out()` function with a 0 value payload.
+2. The function executes `owner = msg.sender` without any access control checks, instantly granting absolute ownership to the caller.
+
+### Execution
+```bash
+forge script script/02-Fallout.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
