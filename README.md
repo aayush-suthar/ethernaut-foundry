@@ -60,3 +60,26 @@ for i in {1..10}; do
   sleep 15
 done
 ```
+
+## 04 - Telephone
+**Difficulty:** 1/5  
+**Vulnerability:** Execution Context Confusion / Insecure Access Control (`tx.origin`)
+
+### Analysis
+The EVM tracks two distinct sender variables within its execution context: `msg.sender` (the immediate caller, which can be an Externally Owned Account or a smart contract) and `tx.origin` (the original EOA that signed the entire transaction chain). The target contract conditionally grants ownership by verifying `if (tx.origin != msg.sender)`. Relying on `tx.origin` for authorization is a severe EVM anti-pattern. It leaves protocols highly vulnerable to phishing attacks, as an intermediate malicious contract can forward a call on behalf of a user, completely spoofing the expected execution context.
+
+### Exploit Path
+1. **The Architecture:** Deployed an intermediary `Attacker.sol` smart contract.
+2. **The Context Shift:** Triggered the `attack()` function on the deployed `Attacker` contract from the local wallet (EOA). The `Attacker` contract subsequently makes an external call to the target's `changeOwner()` function.
+3. **The Payload Bypass:** When the `Telephone` contract evaluates the execution state, `msg.sender` resolves to the address of the `Attacker` contract, while `tx.origin` remains the address of the original EOA wallet. Because `tx.origin != msg.sender` evaluates to `true`, the authorization check is bypassed, and absolute ownership is granted to the EOA address passed in the calldata.
+
+### Execution
+1. Deploy the intermediary attacker contract
+```bash
+forge script script/04-Telephone.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+
+2. Execute the payload and claim ownership
+```bash
+forge script script/04-Telephone.s.sol:Attack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
