@@ -103,7 +103,7 @@ forge script script/06-Delegation.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
 
 ## 07 - Force
-**Difficulty:** 2/5  
+**Difficulty:** 3/5  
 **Vulnerability:** Strict Balance Invariant Break / Forced Ether Delivery (`SELFDESTRUCT`)
 
 ### Analysis
@@ -122,4 +122,22 @@ forge script script/07-Force.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --b
 2. Fund the attacker and trigger the detonation:
 ```bash
 forge script script/07-Force.s.sol:Attack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+
+## 08 - Vault
+**Difficulty:** 2/5  
+**Vulnerability:** Insecure On-Chain Data / State Variable Visibility
+
+### Analysis
+The target `Vault` contract attempts to secure its unlock mechanism by storing the password in a `private` state variable. This is a fundamental architectural misunderstanding of blockchain consensus. In Solidity, the `private` keyword is strictly a compiler-level safeguard—it only prevents other smart contracts from calling and reading the variable during an EVM execution frame. It does absolutely nothing to encrypt or hide the data on the network. Because every Ethereum node must maintain the global state tree to reach consensus, all storage slots of all deployed contracts are completely public and can be queried directly via the RPC endpoint (`eth_getStorageAt`), completely bypassing EVM access controls.
+
+### Exploit Path
+1. **Slot Calculation:** EVM storage slots are 32 bytes each. The contract defines `bool public locked` first. A boolean requires 1 byte, but because the next variable is a `bytes32` (which requires a full 32-byte slot), the EVM cannot pack them together. Therefore, `locked` occupies Storage Slot 0, and the `private password` occupies Storage Slot 1.
+2. **The Extraction:** Query the blockchain directly to read the raw hexadecimal data stored inside Storage Slot 1 of the target contract. In Foundry, this is done using the `vm.load()` cheatcode or the `cast storage` terminal command.
+3. **The Unlock:** Pass the extracted 32-byte hexadecimal password back into the target contract's public `unlock(bytes32)` function to flip the boolean and permanently unlock the vault.
+
+### Execution
+1. Execute the payload to extract the private storage and unlock the vault:
+```bash
+forge script script/08-Vault.s.sol:DeployVault --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
