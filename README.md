@@ -83,3 +83,21 @@ forge script script/04-Telephone.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL
 ```bash
 forge script script/04-Telephone.s.sol:Attack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
+
+## 06 - Delegation
+**Difficulty:** 2/5  
+**Vulnerability:** Execution Context Hijacking / Unsafe `delegatecall`
+
+### Analysis
+The `delegatecall` opcode is designed to dynamically execute the logic of a target contract while preserving the storage, `msg.sender`, and `msg.value` context of the calling contract. The target `Delegation` contract acts as a primitive proxy, implementing a `fallback()` function that blindly forwards all incoming `msg.data` to the `Delegate` contract. Because the Delegate contract contains a `pwn()` function that explicitly modifies the owner state variable (located at Storage Slot 0), an attacker can leverage the `delegatecall` to weaponize this logic and overwrite the proxy's internal state.
+
+### Exploit Path
+1. **The Payload:** Construct the raw 4-byte function selector for the target logic: `abi.encodeWithSignature("pwn()")`.
+2. **The Routing:** Send a low-level transaction containing this specific EVM bytecode directly to the `Delegation` proxy contract.
+3. **The State Overwrite:** Because `pwn()` does not exist in the proxy's ABI, the EVM routes the transaction to the `fallback()` function. The proxy executes `delegatecall`, reading the logic from `Delegate`, but applying the state change (`owner = msg.sender`) directly to its own Storage Slot 0, permanently granting ownership to the attacker.
+
+### Execution
+1. Execute the payload and claim ownership
+```bash
+forge script script/06-Delegation.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
