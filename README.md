@@ -101,3 +101,26 @@ The `delegatecall` opcode is designed to dynamically execute the logic of a targ
 ```bash
 forge script script/06-Delegation.s.sol --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
+
+## 07 - Force
+**Difficulty:** 2/5  
+**Vulnerability:** Strict Balance Invariant Break / Forced Ether Delivery (`SELFDESTRUCT`)
+
+### Analysis
+The target `Force` contract is completely empty. It does not implement a `receive()` or a `payable fallback()` function, meaning the EVM will automatically revert any standard transaction that attempts to send Ether to it. However, the EVM contains specific protocol-level exceptions that bypass the standard execution environment. The `selfdestruct` opcode destroys the calling contract and forcefully teleports its remaining Ether balance to a target address. Because this is a state transition at the protocol level, no code is executed in the target contract, meaning it physically cannot revert the incoming Ether.
+
+### Exploit Path
+1. **The Architecture:** Deploy an intermediate malicious `Attacker` contract that contains a `payable fallback` function (to receive funds) and an `attack()` function that executes the `selfdestruct` opcode.
+2. **The Funding:** Send a low-level transaction with a small value (1 wei) to fund the deployed `Attacker` contract.
+3. **The Detonation:** Trigger the `attack()` function. The EVM destroys the `Attacker` contract and forcefully pushes the 1 wei into the `Force` contract, completely bypassing its lack of payable functions and forcibly increasing its balance.
+
+### Execution
+1. Deploy the intermediate kamikaze contract:
+```bash
+forge script script/07-Force.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+2. Update `DEPLOYED_ATTACKER_ADDRESS` with deployed `DeployAttacker` contract
+3. Fund the attacker and trigger the detonation:
+```bash
+forge script script/07-Force.s.sol:Attack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
