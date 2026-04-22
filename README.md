@@ -119,8 +119,7 @@ The target `Force` contract is completely empty. It does not implement a `receiv
 ```bash
 forge script script/07-Force.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
-2. Update `DEPLOYED_ATTACKER_ADDRESS` with deployed `DeployAttacker` contract
-3. Fund the attacker and trigger the detonation:
+2. Fund the attacker and trigger the detonation:
 ```bash
 forge script script/07-Force.s.sol:Attack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
