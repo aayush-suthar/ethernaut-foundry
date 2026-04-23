@@ -141,3 +141,25 @@ The target `Vault` contract attempts to secure its unlock mechanism by storing t
 ```bash
 forge script script/08-Vault.s.sol:DeployVault --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
+
+## 09 - King
+**Difficulty:** 3/5  
+**Vulnerability:** Denial of Service (DoS) / Unhandled External Call Revert
+
+### Analysis
+The target `King` contract utilizes a dangerous "push" payment architecture. When a user sends an amount of Ether greater than or equal to the current `prize`, the contract attempts to refund the previous king by executing an external Ether transfer. The critical flaw is that the state transition (updating the `king` address) strictly depends on the success of this external transfer. If the previous king is a smart contract designed to refuse Ether, the refund transfer will revert, causing the entire execution frame to revert. This permanently bricks the protocol, preventing anyone from ever interacting with it again. This vulnerability highlights exactly why the "Pull over Push" withdrawal pattern is a mandatory standard in Web3 security.
+
+### Exploit Path
+1. **The Architecture:** Deploy a malicious `Attacker` contract that explicitly rejects incoming Ether. This is achieved by defining a `fallback()` function that contains a strict `revert()` statement.
+2. **The Takeover:** Query the target contract for the current `prize`. Trigger the `Attacker` contract's `attack()` function to send a payload to the target with a `msg.value` slightly larger than the current prize. The `Attacker` contract is now registered in the target's state as the new King.
+3. **The Lockout:** When the Ethernaut factory (or any future player) attempts to send Ether to reclaim the kingship, the target contract will attempt to refund the `Attacker`. The `Attacker`'s `fallback` triggers the `Attacker__AlwaysRevert` error, immediately halting and reverting the transaction. The target contract is permanently locked in a Denial of Service state.
+
+### Execution
+1. Deploy the malicious `Attacker` contract:
+```bash
+forge script script/09-King.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+2. Execute the payload to claim the kingship and permanently brick the target:
+```bash
+forge script script/09-King.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
