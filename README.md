@@ -163,3 +163,25 @@ forge script script/09-King.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --br
 ```bash
 forge script script/09-King.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
+
+## 10 - Re-entrancy
+**Difficulty:** 3/5  
+**Vulnerability:** Reentrancy / Checks-Effects-Interactions (CEI) Violation
+
+### Analysis
+The target `Reentrance` contract suffers from a classic state-synchronization flaw. When processing a withdrawal, the contract executes a low-level external call (`msg.sender.call{value: _amount}("")`) to send Ether **before** updating the user's balance in its internal accounting state. In the EVM, an external call hands over the execution control flow to the receiving address. If the receiver is a malicious smart contract, it can leverage its `fallback` or `receive` function to recursively call the target's `withdraw()` function. Because the target's internal state has not yet been updated, it continues to believe the attacker has a valid balance, dispensing Ether in an infinite loop until its entire balance is drained. This is a critical violation of the Checks-Effects-Interactions pattern.
+
+### Exploit Path
+1. **The Architecture:** Deploy a malicious `Attacker` contract. This contract must contain a `fallback()` function containing the recursive payload: a conditional check (`if address(target).balance > 0`) followed by a subsequent call to `target.withdraw()`.
+2. **The Primer:** Execute the `deposit()` function on the `Attacker` contract. This sends a small primer amount (`0.0005 ether`) to the target's `donate()` function, officially registering a balance for the `Attacker` in the target's internal mapping.
+3. **The Loop:** In the exact same transaction, the `Attacker` calls `target.withdraw()` for the initial primer amount. The target sends the Ether, triggering the `Attacker`'s `fallback()`. The `fallback()` intercepts the execution flow and immediately calls `target.withdraw()` again. This cycle repeats, draining the target's complete ETH balance before the initial execution frame can ever resolve and update the balances.
+
+### Execution
+1. Deploy the malicious `Attacker` contract:
+```bash
+forge script script/10-Reentrancy.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+2. Execute the payload to prime the mapping and drain the target:
+```bash
+forge script script/10-Reentrancy.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
