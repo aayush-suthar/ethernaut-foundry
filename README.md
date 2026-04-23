@@ -185,3 +185,27 @@ forge script script/10-Reentrancy.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_UR
 ```bash
 forge script script/10-Reentrancy.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
+
+## 11 - Elevator
+**Difficulty:** 2/5  
+**Vulnerability:** Interface Manipulation / Unsafe External Call Trust
+
+### Analysis
+The target `Elevator` contract relies on an external interface (`Building`) to determine if a requested floor is the top floor. The critical architectural flaw is that the `goTo()` function calls `building.isLastFloor(_floor)` twice within the same execution frame: first to pass the authorization check, and second to assign the final state of the `top` variable. Because the `Elevator` contract blindly trusts the external implementation of `msg.sender`, an attacker can create a malicious contract that does not act purely. By maintaining an internal state variable, the attacker can force the same function to return two completely different boolean values during the exact same transaction.
+
+### Exploit Path
+1. **The Architecture:** Deploy a malicious `Attacker` contract that acts as the `Building`. It must contain a state variable (e.g., `bool public toggle = false;`) and implement the `isLastFloor(uint256)` function required by the target.
+2. **The State Manipulation:** Inside `isLastFloor()`, write logic that flips the boolean `toggle` state every time it is called. 
+3. **The Bypass:** Trigger the `attack()` function to call `target.goTo(1)`. 
+    * On the first call from the target (the `if` statement check), the malicious function flips `toggle` to `true` and returns `false`, successfully bypassing the conditional block.
+    * On the second call from the target (the state assignment), the malicious function flips `toggle` to `false` and returns `true`, permanently setting the Elevator's `top` variable to `true`.
+
+### Execution
+1. Deploy the malicious `Attacker` contract:
+```bash
+forge script script/11-Elevator.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+2. Execute the payload to trigger the dual-return bypass and reach the top:
+```bash
+forge script script/11-Elevator.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
