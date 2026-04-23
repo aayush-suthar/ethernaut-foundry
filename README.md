@@ -209,3 +209,28 @@ forge script script/11-Elevator.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL 
 ```bash
 forge script script/11-Elevator.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
+
+## 12 - Privacy
+**Difficulty:** 3/5  
+**Vulnerability:** Insecure On-Chain Data / Storage Slot Packing & Type Casting
+
+### Analysis
+The `Privacy` contract reinforces the concept that the `private` visibility modifier provides zero cryptographic security, but it adds the complexity of EVM storage packing and explicit type downcasting. Storage slots are exactly 32 bytes. The EVM packs contiguous variables into a single slot if they fit. Based on the target's source code, Slot 0 holds a `bool`, Slot 1 holds a `uint256` (requiring a new slot), and Slot 2 packs a `uint8`, `uint8`, and `uint16` together. A fixed-size array always begins in a fresh slot. Therefore, the `bytes32[3] private data` array occupies Slots 3, 4, and 5 sequentially. 
+
+The unlock mechanism requires the `bytes16` equivalent of `data[2]`, which is stored in Slot 5. When downcasting a `bytes32` type to `bytes16`, Solidity truncates from the right side, preserving the highest-order (left-most) 16 bytes of the hexadecimal string. 
+
+### Exploit Path
+1. **Slot Calculation:** Map the target contract's state variables to identify that the required key (`data[2]`) resides entirely within Storage Slot 5.
+2. **The Extraction:** Query the blockchain directly using `cast storage <TARGET_ADDRESS> 5` to read the raw 32-byte hexadecimal payload sitting in that specific slot.
+3. **The Truncation & Unlock:** Inside the `Attacker` contract, explicitly cast the retrieved `bytes32` string into `bytes16`. Pass this cleanly truncated payload into the target's `unlock(bytes16)` function to bypass the check and permanently unlock the contract.
+
+### Execution
+1. Deploy the `Attacker` contract containing the pre-calculated, casted key:
+```bash
+forge script script/12-Privacy.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+
+2. Execute the payload to trigger the unlock function:
+```bash
+forge script script/12-Privacy.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
