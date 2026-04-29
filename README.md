@@ -234,3 +234,28 @@ forge script script/12-Privacy.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL -
 ```bash
 forge script script/12-Privacy.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
+
+## 13 - Gatekeeper One
+**Difficulty:** 5/5  
+**Vulnerability:** EVM Gas Metering / Bitwise Masking / Context Hijacking
+
+### Analysis
+The `GatekeeperOne` contract serves as a comprehensive exam on EVM execution architecture, data downcasting, and gas forwarding mechanics. It enforces three distinct "gates" that must be simultaneously bypassed within a single transaction.
+
+*   **Gate One (`msg.sender != tx.origin`):** This enforces a strict execution context. It requires the attack to originate from a smart contract rather than an Externally Owned Account (EOA), as `tx.origin` evaluates to the top-level signer, while `msg.sender` evaluates to the immediate caller in the stack.
+*   **Gate Two (`gasleft() % 8191 == 0`):** This exploits the EVM's strict gas-metering architecture. It requires the execution frame to have a specific gas remainder at the exact opcode where `gasleft()` is evaluated. Because EVM opcodes consume dynamic amounts of gas based on storage state (e.g., cold vs. warm access), this necessitates highly precise gas forwarding or an on-chain brute-force mechanism.
+*   **Gate Three (Typecasting & Bitwise Logic):** This tests raw bitwise arithmetic and data loss during truncation. The requirement relies on converting a `bytes8` key through various integer sizes. 
+    *   `uint32(uint64(key)) == uint16(uint160(tx.origin))` requires the lowest two bytes of the key to match the lowest two bytes of `tx.origin`.
+    *   `uint32(uint64(key)) != uint64(key)` requires the upper 4 bytes (of the 8-byte key) to contain non-zero data, preventing a simple 1:1 downcast match.
+    *   The bitmask `0xFFFFFFFF0000FFFF` mathematically guarantees these conditions by zeroing out bytes 5 and 6, while perfectly preserving the required boundary bytes.
+
+### Exploit Path
+1.  **The Key Generation:** Inside the attacker contract, extract the `tx.origin` address, downcast it to `uint64` to isolate the lowest 8 bytes, and apply the bitwise AND mask (`0xFFFFFFFF0000FFFF`) to structure the data for Gate 3.
+2.  **The Context Hijack:** Deploy an intermediate `Attacker` contract to interface with the target, instantly satisfying Gate 1's origin check.
+3.  **The On-Chain Brute Force:** Instead of pre-calculating the exact gas off-chain, initiate a loop inside the `attack()` function that executes low-level `.call` operations with sequentially incremented gas limits (`base + i`). The loop intercepts the boolean return values, shielding the parent frame from `OutOfGas` reverts, and gracefully exits the moment `8191` modulo alignment is achieved.
+
+### Execution
+1. Deploy the `Attacker` contract and execute the brute-force payload in a single transaction sequence using the combined deployment script:
+```bash
+forge script script/13-GateKeeperOne.s.sol:DeployAndAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
