@@ -236,7 +236,7 @@ forge script script/12-Privacy.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --b
 ```
 
 ## 13 - Gatekeeper One
-**Difficulty:** 5/5  
+**Difficulty:** 4/5  
 **Vulnerability:** EVM Gas Metering / Bitwise Masking / Context Hijacking
 
 ### Analysis
@@ -258,4 +258,51 @@ The `GatekeeperOne` contract serves as a comprehensive exam on EVM execution arc
 1. Deploy the `Attacker` contract and execute the brute-force payload in a single transaction sequence using the combined deployment script:
 ```bash
 forge script script/13-GateKeeperOne.s.sol:DeployAndAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+
+## 15 - Naught Coin
+**Difficulty:** 3/5
+**Vulnerability:** Unprotected Alternate Transfer Path
+
+### Analysis
+The `NaughtCoin` contract extends OpenZeppelin's ERC-20 implementation and attempts to enforce a 10-year lockup period on the player's token balance. The protection mechanism is implemented by overriding the `transfer()` function and applying a custom `lockTokens` modifier.
+
+This approach is fundamentally flawed because ERC-20 exposes multiple mechanisms for transferring tokens. While direct transfers are restricted, the contract inherits the standard `approve()` and `transferFrom()` functionality without additional access controls.
+
+The critical architectural oversight is that `transfer()` and `transferFrom()` operate on different execution contexts:
+
+*   `transfer()` debits tokens directly from msg.sender.
+*   `transferFrom()` allows an approved spender to move tokens from an arbitrary `from` address.
+
+Because the lock modifier only validates `msg.sender`, an attacker can approve a third-party contract to spend their tokens and subsequently invoke `transferFrom()`. During this execution:
+
+*   `from` resolves to the player's address.
+*   `msg.sender` resolves to the intermediary attacker contract.
+
+As a result, the player's balance can be drained while completely bypassing the lock restriction.
+
+### Exploit Path
+1. **The Architecture:** Deploy an intermediary `Attacker.sol` contract capable of invoking `transferFrom()` on the target token.
+2. **The Allowance:** From the player account, call `approve(attacker, INITIAL_SUPPLY)` on the `NaughtCoin` contract, granting the attacker contract permission to spend the entire token balance.
+3. **The Bypass:** Trigger the `Attacker.transferMe()` function. The attacker contract executes:
+```javascript
+
+coin.transferFrom(
+    player,
+    address(this),
+    coin.balanceOf(player)
+);
+
+```
+
+4. **The Context Shift:** The target contract evaluates:
+
+from       = player
+msg.sender = attacker
+Since the lock logic only validates `msg.sender`, the transfer succeeds while moving the player's complete balance to the attacker contract.
+
+### Execution
+1. Deploy the `Attacker` contract, approve the allowance, and execute the payload:
+2. ```bash
+forge script script/15-NaughtCoin.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
