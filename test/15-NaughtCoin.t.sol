@@ -16,7 +16,7 @@ contract TestNaughtCoin is Test {
     address public constant TARGET_ADDRESS = 0x252348C239c3435DFab1365C20DDF989dd8A8431;
     INaughtCoin target;
     Attacker attacker;
-    uint256 public immutable INITIAL_SUPPLY;
+    uint256 public INITIAL_SUPPLY;
 
     function setUp() public {
         string memory rpcUrl = vm.envString("SEPOLIA_RPC_URL");
