@@ -8,7 +8,7 @@ interface IGatekeeperOne {
     function entrant() external view returns (address);
 }
 
-contract GatekeeperOneTest is Test {
+contract TestGatekeeperOne is Test {
     address constant TARGET = 0xfc50E053f9bc7038e42B76ff28aa8F26B9b06063;
 
     IGatekeeperOne target;
