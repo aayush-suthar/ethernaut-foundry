@@ -11,7 +11,7 @@ interface ISimpleToken{
 contract TestRecovery is Test {
     address public constant RECOVERY_ADDRESS = 0x65637772Db8FE6129358ea3D4Ef4Cb343ACB435E;
     uint256 public constant INITIAL_BALANCE = 0.001 ether; 
-    uint256 public constant NOUNCE = 1;
+    uint256 public constant NONCE = 1;
     address attacker;
     ISimpleToken target;
     function setUp() public {
@@ -22,7 +22,7 @@ contract TestRecovery is Test {
 
     function testRecovery() public {
         // find lost contract address
-        address lostContractAddress = vm.computeCreateAddress(RECOVERY_ADDRESS, NOUNCE);
+        address lostContractAddress = vm.computeCreateAddress(RECOVERY_ADDRESS, NONCE);
         console.log(lostContractAddress);
 
         // build target (lost contract address)

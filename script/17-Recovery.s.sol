@@ -9,11 +9,11 @@ interface ISimpleToken{
 
 contract DeployAttack is Script {
     address public constant RECOVERY_ADDRESS = 0x65637772Db8FE6129358ea3D4Ef4Cb343ACB435E;
-    uint256 public constant NOUNCE = 1;
+    uint256 public constant NONCE = 1;
     ISimpleToken target;
 
     function run() public {
-        address lostContractAddress = vm.computeCreateAddress(RECOVERY_ADDRESS, NOUNCE);
+        address lostContractAddress = vm.computeCreateAddress(RECOVERY_ADDRESS, NONCE);
         target = ISimpleToken(lostContractAddress);
 
         vm.startBroadcast(vm.envUint("PRIVATE_KEY"));
