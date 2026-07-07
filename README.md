@@ -473,3 +473,48 @@ by using this p and x, we can calculate the desired index of codex which we can 
 ```bash
 forge script ./script/19-AlienCodex.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ``` 
+
+## 20 - Denial
+**Difficulty:** 3/5  
+**Vulnerability:** Gas griefing via untrusted external call / gas based DoS
+
+### Analysis
+The `Denial` contract lets anyone to be a withdrawing partner. The `withdraw` function makes an untrusted external call before completing its own execution and forwards almost all of the remaining gas to the callee. Since `.call` forwards almost all of the remaining gas by default, the callee can consume nearly all of it.
+
+In this challenge, an attacker can deploy a contract which burns a lot of gas (like having an infinite while loop in `receive` function), and can make it a withdrawing partner. When the `owner` calls `withdraw`, the `.call` forwards almost all of the remaining gas to the malicious contract (according to EIP-150, 63/64th of the remaining gas is forwarded and can be used by the malicious contract, and after the call the `Denial` contract ends up with 1/64th of remaining gas for rest of the executions). Therefore, if the remaining gas is not able to perform the rest of the execution, it will revert the whole transaction with OutOfGas.
+
+Gas analysis of `withdraw` function:
+
+```javascript
+    function withdraw() public {
+
+        //// BLOCK 1 //////////////////////////////////////////////
+        uint256 amountToSend = address(this).balance / 100; ////// BURNS ~199 gas
+        /////////////////////////////////////////////////////////
+
+        partner.call{value: amountToSend}("");
+
+        //// BLOCK 2 //////////////////////////////////////////////
+        payable(owner).transfer(amountToSend);              //////
+        timeLastWithdrawn = block.timestamp;               ////// BURNS ~27458
+        withdrawPartnerBalances[partner] += amountToSend; //////
+        ///////////////////////////////////////////////////////
+    }
+```
+The `owner` would give maximum of 1M gas for transaction to pass. Let's do some rough calculation around partner's call, finding how much has we have:
+1. 1M = 1000000 gas available.
+2. 1000000 - 199 = ~999801 gas remaining after Block 1.
+3. Partner call opcode execution will burn some gas and 63/64th of leftover gas would be forwarded to partner's execution (the infinite loop consumes all the forwarded gas and halt with an out-of-gas exception).
+4. So we have 1/64th leftover gas for Block 2, which is ~15621 (=999801/64) gas at most. But Block 2 execution requires ~27458 gas to complete! 
+5. The partner contract consumes so much of the forwarded gas that the remaining gas is insufficient to execute Block 2. As a result, `withdraw` runs out of gas and reverts, preventing the owner from withdrawing funds.    
+
+### Exploit Path
+1. Deploy the `Attacker` contract. It has only `receive` function which execute infinite while loop.
+2. Set `Attacker` contract as withdrawing partner by using `setWithdrawPartner`.
+3. Whenever `owner` calls the `withdraw`, the process will run out of gas and revert out as gas would be insufficient for `withdraw` operations because `Attacker` consume most of it. 
+
+### Execution
+1. Execute the exploit path (done in single script):
+```bash
+forge script script/20-Denial.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
