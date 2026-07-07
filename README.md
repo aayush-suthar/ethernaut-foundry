@@ -400,3 +400,76 @@ Since the target token was the first contract created by `Recovery`, its nonce i
 ```bash
 forge script script/17-Recovery.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```   
+
+## 19 - Alien Codex
+**Difficulty:** 4/5  
+**Vulnerability:** Array length underflow leading to arbitrary storage write
+
+### Analysis
+The `AlienCodex` uses older solidity version which has unchecked arithmetic. The `retract` function results in decreasing length of the array which means the last element no longer accessed through the array.
+```javascript
+    function retract() public contacted {
+        codex.length--;
+    }
+``` 
+The issue is if the array is empty then calling `retract` results in length goes from `0` to `-1`, but because of unchecked arithmetic it becomes `2^256 - 1` and would not revert. Since the array length becomes `2^256 - 1`, almost every `uint256` index passes the bounds check. Because dynamic array elements are stored at `keccak256(p) + index`, we can choose an index that maps to any desired storage slot.
+Let the storage slot for arrays length be `p` and if we want to read / write the storage slot `x`, then the required array index is :
+`Index = (x - keccak256(p)) % 2^256`  OR  `Index = uint256.max - keccak256(p) + x + 1`
+<details>
+<summary>Proof</summary>
+
+```javascript
+p = storage slot of arrays length
+x = storage slot we want to read / write
+
+The arrays index i stores the value at storage slot: keccak256(p) + i
+We want the storage slot x
+let the arrays index be `i` for it
+
+so, keccak256(p) + i = x
+All calulations are performed modulo 2^256 
+
+i = (x - keccak256(p)) mod 2^256
+i = 2^256 + x - keccak256(p)
+Add and subtract 1 
+i = 2^256 - 1 + x - keccak256(p) + 1
+2^256 - 1 is uint256.max
+
+therefore, i = uint256.max - keccak256(p) + x + 1
+```
+
+</details>
+
+In this challenge, we have three variables: address owner, bool contact and bytes32[] codex
+
+```text
+Storage Layout
+
+slot 0
+┌──────────────┬──────────┬────────────────────────────┐
+│ 11 bytes     │ contact  │ owner                      │
+│ unused       │ (1 byte) │ (20 bytes)                 │
+└──────────────┴──────────┴────────────────────────────┘
+
+slot 1
+┌──────────────────────────────────────────────────────┐
+│                codex.length (uint256)                │
+└──────────────────────────────────────────────────────┘
+```
+Since codex.length is stored in storage slot 1, we have p = 1.
+codex[i] storage slot would be : keccak256(1) + i
+
+so, p = 1 and owner is at slot 0 which we want to alter so x = 0
+by using this p and x, we can calculate the desired index of codex which we can alter to alter the owner's value using `revise` function.
+
+### Exploit Path
+1. Call `makeContact`. It will set the `contact` variable to `true` since all other functions require `contact` to be `true`.
+2. At this stage, `codex` array would be empty. Call `retract`. It changes the array length from `0` to `2^256 - 1`, allowing us to choose an index that maps to any arbitrary storage slot.
+3. Since `owner` occupies the lower 20 bytes of storage slot `0` (x = 0) and `codex` length is at storage slot `1` (p = 1), we calculate the index which maps `codex[index]` to storage slot `0` using the formula derived above.
+4. Using `revise` we change the value of codex index (we just calculated) to our own address. Since that index corresponds to the owner's storage slot, our own address is written to that slot and the `owner` variable now stores our address. 
+
+### Execution
+1. Execute the exploit using:
+```bash
+forge script ./script/19-AlienCodex.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+``` 
