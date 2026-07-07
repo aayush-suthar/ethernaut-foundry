@@ -496,7 +496,7 @@ Gas analysis of `withdraw` function:
 
         //// BLOCK 2 //////////////////////////////////////////////
         payable(owner).transfer(amountToSend);              //////
-        timeLastWithdrawn = block.timestamp;               ////// BURNS ~27458
+        timeLastWithdrawn = block.timestamp;               ////// BURNS ~27458 gas
         withdrawPartnerBalances[partner] += amountToSend; //////
         ///////////////////////////////////////////////////////
     }
