@@ -322,18 +322,18 @@ timeZone1Library.delegatecall(
 
 ### Preservation Storage Layout         
 
-| Slot | Variable |
-|------|-----------|
-| 0 | `timeZone1Library` |
-| 1 | `timeZone2Library` |
-| 2 | `owner` |
-| 3 | `storedTime` |
+| Slot | Variable           |
+| ---- | ------------------ |
+| 0    | `timeZone1Library` |
+| 1    | `timeZone2Library` |
+| 2    | `owner`            |
+| 3    | `storedTime`       |
 
 ### LibraryContract Storage Layout
 
-| Slot | Variable |
-|------|-----------|
-| 0 | `storedTime` |
+| Slot | Variable     |
+| ---- | ------------ |
+| 0    | `storedTime` |
 
 ### Exploit Path
 1. Call `setFirstTime(uint256(uint160(address(attackerContract))))`. This overwrites timeZone1Library with the attacker's contract address.
@@ -517,4 +517,24 @@ The `owner` would give maximum of 1M gas for transaction to pass. Let's do some 
 1. Execute the exploit path (done in single script):
 ```bash
 forge script script/20-Denial.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
+
+## 21 - Shop
+**Difficulty:** 2/5  
+**Vulnerability:** Trusting an untrusted external call  
+
+### Analysis
+The `Shop` contract interacts with a `Buyer` contract through an external `price()` view function. Although `price()` is a view function and cannot modify state, it can still read the state of other contracts, including `Shop`. In the `buy()` function, `Shop` contract make some checks and confirms that the price asked is more than the current `price` and whether it is sold or not. It first sets the `isSold` to `true` and then changes `price` to asked price, but here the contract assumes that repeated calls to `buyer.price()` return the same value and between the two calls to `buyer.price()`, the value of `isSold` changes from `false` to `true`.
+
+A malicious `Buyer` can inspect `Shop.isSold()`. During the first call, `isSold` is `false`, so `price()` returns a value greater than or equal to the current price, allowing the purchase to proceed. After `Shop` sets `isSold = true`, it calls `price()` again. This time the buyer detects the changed state and returns a much lower price, which becomes the shop's final selling price.    
+
+### Exploit Path
+1. Deploy the `Buyer` contract. This contract should have a view function `price()` which returns two different values based on the value of `Shop.isSold()`. If `isSold` is `false`, return some high price (>= 100) and if `isSold` is `true`, return some low value (< 100). It has an another function for calling the `buy()` function of `Shop` contract.
+2. Since `isSold` is declared `public`, Solidity automatically generates a getter function (`isSold()`). The attacker's `Buyer` contract can call this getter from within its `price()` function to determine whether the first or second call is being made.
+3. `Buyer` calls `Shop.buy()`. During the first call to `price()`, `Shop.isSold()` is `false`, so `price()` returns a value greater than or equal to `100`, satisfying the purchase condition. After `Shop` sets `isSold = true`, it calls `price()` again to update its price. This time, `price()` returns a value less than `100`, causing the shop's final price to be updated to the lower value. 
+
+### Execution
+1. Execute the exploit using:
+```bash
+forge script script/21-Shop.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
