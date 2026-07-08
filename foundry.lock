@@ -7,8 +7,8 @@
   },
   "lib/openzeppelin-contracts": {
     "tag": {
-      "name": "v3.4.0-solc-0.7",
-      "rev": "5c8746f56b4bed8cc9e0e044f5f69ab2f9428ce1"
+      "name": "v5.6.1",
+      "rev": "5fd1781b1454fd1ef8e722282f86f9293cacf256"
     }
   }
 }
