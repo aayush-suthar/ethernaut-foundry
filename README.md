@@ -538,3 +538,13 @@ A malicious `Buyer` can inspect `Shop.isSold()`. During the first call, `isSold`
 ```bash
 forge script script/21-Shop.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
+
+## 00 - Name
+**Difficulty:** 2/5  
+**Vulnerability:** Incorrect AMM pricing formula - failed to preserve the constant-product invariant 
+
+### Analysis
+
+### Exploit Path
+
+### Execution
