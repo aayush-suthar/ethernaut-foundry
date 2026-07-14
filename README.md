@@ -539,12 +539,48 @@ A malicious `Buyer` can inspect `Shop.isSold()`. During the first call, `isSold`
 forge script script/21-Shop.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
 ```
 
-## 00 - Name
+## 22 - Dex
 **Difficulty:** 2/5  
-**Vulnerability:** Incorrect AMM pricing formula - failed to preserve the constant-product invariant 
+**Vulnerability:** Spot-price based swaps violate the constant-product invariant. 
 
 ### Analysis
+This `Dex` uses spot price as the price oracle. Performing exchange using the spot price doesn't preserves the AMM constant-product invariant and every swap decrease the total liquidity of the pool.
+<details>
+<Summary>Proof</Summary>
+
+```javascript
+Suppose x0 and y0 be the initial supply of two tokens X and Y.
+Let x0 * y0 = k (k = constant-product invariant.).
+Suppose dx amount of token X is exchanged for token Y
+ammount of token Y received is dy.
+Spot price of X at time of exchange is (y0 / x0)
+So, dy = (y0 / x0) * dx
+
+product - 
+before : x0 * y0
+after : (x0 + dx) * (y0 - dy) 
+    = (x0 * y0) - (x0 * dy) + (y0 * dx) - (dx * dy)
+    = (x0 * y0) - (x0 * ((y0/x0)*dx)) + (y0 * dx) - (dx * ((y0/x0)*dx))
+    = (x0 * y0) - (y0 * dx) + (y0 * dx) - ((y0/x0) * (dx^2))
+    = (x0 * y0) - ((y0/x0) * dx^2)
+    = before - ((y0/x0) * dx^2)
+    = before - draining factor          where, draining factor = ((y0/x0) * dx^2)
+
+So, after < before
+Hence, the product was decreased means every swap results in decrease in liquidity (at least one token faces loss of liquidity), which also shows constant product formula does not hold.
+
+```
+
+</details>
+
+Since every swap reduces the liquidity of at least one token, and no fees was incurred, continous swapping can continously drains the tokens until at least one of the token pool was empty. Also the draining factor, which is the amount of decreament in the constant product per swap is proportional to `((y0/x0) * dx^2)` (see proof), we can try to swap as much as we can so the pool tokens decrease rapidly. Hence, continous swapping drains the token pool and will empty at least one token pool.
 
 ### Exploit Path
+1. Since we initially own 10 units each of tokenA and tokenB, we can swap all of one token for the other and obtain 20 units of a single token.
+2. Thereafter, we repeatedly swap the entire balance of the token we currently own. Since larger swaps result in a larger decrease in the constant-product invariant, this strategy drains the pool more rapidly and minimizes the number of required transactions.
 
 ### Execution
+1. Execute the exploit using:
+```bash
+forge script script/22-Dex.s.sol:DeployAttack --rpc-url $SEPOLIA_RPC_URL --broadcast
+```
